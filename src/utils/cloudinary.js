@@ -22,9 +22,9 @@ const uploadOnCloudinary = async (localFilePath) => {
     });
    
     // Cleanup local file after successful upload
-    // if (fs.existsSync(localFilePath)) {
-    //   fs.unlinkSync(localFilePath);
-    // }
+    if (fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
+    }
     
     // file has been uploaded successfull
     console.log("file is uploadded on cloudinary", response.url);
