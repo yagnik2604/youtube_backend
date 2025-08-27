@@ -29,12 +29,15 @@ const userSchema = new Schema(
          },
 
          avatar:{
-             type: String, // cloudinary url
-             require: true,
+             avatar_url : {type: String, required: true},  // cloudinary url
+             avatarPublic_id: {type: String, required: true}, // public id(unique id) for image
+        
          },
 
           coverImage:{
-             type: String, // cloudinary url
+            coverImage_url : {type: String},  // cloudinary url
+            coverImagePublic_id: {type: String}, // public id(unique id) for image
+             
          },
          watchHistory: [
             {

@@ -5,7 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
 import { getRounds } from "bcrypt";
-
+import {v2 as cloudinary} from 'cloudinary'
 
 const generateAccessAndRefreshTokens = async(userId)=>{
      
@@ -77,15 +77,21 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const user = await User.create({
     fullName,
-    avatar: avatar.url,
-    coverImage: coverimg?.url,
+    avatar:{ 
+       avatar_url : avatar.url,
+       avatarPublic_id: avatar.public_id
+    },
+    coverImage: {
+       coverImage_url: avatar.url,
+       coverImagePublic_id: avatar.public_id
+    },
     email,
     password,
     username: username.toLowerCase(),
   });
 
   const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken"
+    "-password -refreshToken -avatar.avatarPublic_id -coverImage.coverImagePublic_id"
   );
 
   if (!createdUser) {
@@ -222,9 +228,136 @@ const refreshAccessToken = asyncHandler(async(req, res)=>{
    }
 })
 
+
+const changeCurrentPassword = asyncHandler(async(req, res)=>{
+      const {oldPassword, newPassword} = req.body
+
+      const user = await User.findById(req.user._id)
+      const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+      
+      if(!isPasswordCorrect){
+         throw new ApiError(400, "invalid old password")
+      }
+
+      user.password = newPassword
+      await user.save({validateBeforeSave: false})
+
+      return res.status(200)
+                 .json(new ApiResponse(
+                  200,
+                  {},
+                  "password changed successfully"
+                 ))
+})
+
+
+const getCurrentUser = asyncHandler(async(req, res)=>{
+    return res.status(200)
+              .json(new ApiResponse(
+                200,
+                req.user,
+                "user fetch successfully"
+              ))
+})
+
+
+const updateAccountDetaile = asyncHandler(async(req, res)=>{
+    
+  const {fullName, email, username} = req.body
+  
+  if(!username || !fullName || !email){
+     throw new ApiError(400, "all field are require")
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+        $set:{
+          fullName: fullName,
+          username: username,
+           email: email
+        }
+    },
+    {new: true}
+  ).select("-password")
+
+ return res.status(200)
+            .json(new ApiResponse(
+              200,
+              user,
+              "account detailed updated successfully"
+            ))
+
+});
+
+const updateAvatar = asyncHandler(async(req, res)=>{
+    
+     console.log("Uploaded file:", req.file);
+     
+    const avatarLocalPaath = req.file?.path
+
+    if(!avatarLocalPaath){
+       throw new ApiError(400, "avatar file is mising")
+    }
+    
+    // upload new image to cloudinary
+    const avatar = await uploadOnCloudinary(avatarLocalPaath)
+   
+    if(!avatar.url){
+      throw new ApiError(400, "error while uploading avatar to cloudinery")
+    }
+    
+    const user = await User.findById(req.user._id)
+    
+    //delete old images if exist
+    if(user.avatar?.avatarPublic_id){
+        await cloudinary.uploader.destroy(user.avatar.avatarPublic_id);
+    }
+
+    //update avatar field
+
+    // const updatedUser = await User.findByIdAndUpdate(
+    //    req.user._id,
+    //    {
+    //          $set: {
+    //            avatar: {
+    //               avatar_url: avatar.url,
+    //               avatarPublic_id: avatar.public_id
+    //            }
+    //          }
+    //    },
+    //    {new: true}
+    // ).select("-password")
+
+
+    //update avatar field
+
+    user.avatar = {
+       avatar_url: avatar.url,
+       avatarPublic_id: avatar.public_id
+    }
+    await user.save({validateBeforeSave: false})
+ 
+    const updatedUser = await User.findById(user._id).select(
+       " -password -refreshToken -avatar.avatarPublic_id -coverImage.coverImagePublic_id"
+    );
+
+    return res.status(200)
+               .json(new ApiResponse(
+                200,
+                updatedUser,
+                "avatar image updated successfully"
+               ))
+
+})
+
 export { 
   registerUser , 
   loginUser, 
   logoutUser,
-  refreshAccessToken
+  refreshAccessToken,
+  changeCurrentPassword,
+  getCurrentUser,
+  updateAccountDetaile,
+  updateAvatar
 };
