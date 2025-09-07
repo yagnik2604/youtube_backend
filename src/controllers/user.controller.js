@@ -6,6 +6,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
 import { getRounds } from "bcrypt";
 import {v2 as cloudinary} from 'cloudinary'
+import { json } from "express";
 
 const generateAccessAndRefreshTokens = async(userId)=>{
      
@@ -351,6 +352,47 @@ const updateAvatar = asyncHandler(async(req, res)=>{
 
 })
 
+const updateCoverImages = asyncHandler(async(req, res)=>{
+     
+    console.log(req.file);
+
+    const coverImageLocalPath = req.file?.path
+
+    if(!coverImageLocalPath){
+        throw new ApiError(400, "coverImage file is missing" )
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if(!coverImage.url){
+       throw new ApiError(400, "error while uploading coverImage to cloudinary")
+    }
+
+    const user = await User.findById(req.user._id)
+
+    // delete old image if exist
+    if(user.coverImage?.coverImagePublic_id){
+       await cloudinary.uploader.destroy(user.coverImage.coverImagePublic_id)
+    }
+
+    user.coverImage ={
+       coverImage_url : coverImage.url,
+       coverImagePublic_id: coverImage.public_id
+    }
+
+    await user.save({validateBeforeSave :false})
+
+    const updatedUser = await User.findById(user._id).select(
+       "-password -refreshToken -avatar.avatarPublic_id -coverImage.coverImagePublic_id"
+    )
+      
+    return res.status(200)
+              .json( new ApiResponse(
+               200,
+               updatedUser,
+               "coverImage is updated successfully"
+              ))
+})
 
 const getUserChannelProfile = asyncHandler(async(req, res)=>{
     
@@ -427,5 +469,6 @@ export {
   getCurrentUser,
   updateAccountDetaile,
   updateAvatar,
+  updateCoverImages,
   getUserChannelProfile
 };
