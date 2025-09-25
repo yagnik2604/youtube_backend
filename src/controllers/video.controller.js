@@ -5,7 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { Video } from "../models/video.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { isValidObjectId } from "mongoose";
-import { application } from "express";
+import {v2 as cloudinary} from "cloudinary"
 
 
 //--------------- publish video------------------//
@@ -145,6 +145,10 @@ const updateVideo = asyncHandler(async(req, res)=>{
          throw new ApiError(400, "video not found")
     }
 
+    if(video.thumbnail?.thumbnailPublic_url){
+        await cloudinary.uploader.destroy(video.thumbnail.thumbnailPublic_url)
+    }
+
     video.title = title
     video.description = description
     video.thumbnail={
@@ -178,9 +182,53 @@ const updateVideo = asyncHandler(async(req, res)=>{
     }
 })
 
+//--------------delete video ----------//
+const deleteVideo = asyncHandler(async(req, res)=>{
+     
+    const {videoId} = req.params
+    if(!isValidObjectId(videoId)){
+        throw new ApiError(400, "invalid videoId")
+    }
+   
+    // find video
+    const video = await Video.findById(videoId)
+    if(!video){
+         throw new ApiError(400, "video not found")
+    }
+    
+    // authorization check
+    if(!video.owner.equals(req.user._id)){
+          throw new ApiError(400, "you are not authorized to delete this video")
+    }
+    
+    // delete thumbnail from cloudinary
+    if(video.thumbnail.thumbnailPublic_url){
+        const deleteThumbnail = await cloudinary.uploader.destroy(video.thumbnail.thumbnailPublic_url)
+         if(!deleteThumbnail){
+             throw new ApiError(400, "thumbnail not deleted from cloudinary")
+         }
+    }
+
+    // delete video from cloudinary
+    if(video.videoFile.videoFilePublic_url){
+      const deleteVideo = await cloudinary.uploader.destroy(video.videoFile.videoFilePublic_url)
+      if(!deleteVideo){
+          throw new ApiError(400, "video not deleted from cloudinary")
+      }
+    }
+     
+    // delete document from db
+    await video.deleteOne();
+     
+    // response
+    return res.status(200)
+               .json(new ApiResponse(200, {}, "video delete successfully"))   
+
+})
 
 export{
     publishVideo,
     getVideoById,
-    updateVideo
+    updateVideo,
+    deleteVideo
 }
