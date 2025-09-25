@@ -1,9 +1,11 @@
 
 import { ApiError } from "../utils/ApiError.js"
-import {asycHandler} from "../utils/asyncHandler.js"
+import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { Video } from "../models/video.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
+import { isValidObjectId } from "mongoose";
+import { application } from "express";
 
 
 //--------------- publish video------------------//
@@ -12,8 +14,10 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 // upload video and thumbnail to local storage and get path
 // upload video and thumbnail to cloudinary
 // create video docmnet in the database
-const publishVideo = asycHandler(async(req, res)=>{
+const publishVideo = asyncHandler(async(req, res)=>{
        
+     try{
+
     const {title, description} = req.body
 
     if([title, description].some((field)=> field?.trim() =="")){
@@ -23,6 +27,8 @@ const publishVideo = asycHandler(async(req, res)=>{
     const videoLocalPaath = req.files?.videoFile[0]?.path
     const thumbnailLocalPath = req.files?.thumbnail[0]?.path
        
+    console.log(videoLocalPaath)
+    console.log(thumbnailLocalPath)
      
     if(!videoLocalPaath){
         throw new ApiError(400, "please upload video")
@@ -36,11 +42,15 @@ const publishVideo = asycHandler(async(req, res)=>{
     if(! thumbnailLocalPath){
         throw new ApiError(400, "please upload thumbnail")
     }
+
     const thumbnail =await uploadOnCloudinary(thumbnailLocalPath);
     if(!thumbnail){
          throw new ApiError(400, "thumbnail uploading failed")
     }
- 
+   
+    console.log(video)
+    console.log(thumbnail)
+
     const content = await Video.create({
 
         title: title,
@@ -69,8 +79,108 @@ const publishVideo = asycHandler(async(req, res)=>{
                 "video uploaded successfully"
                ))
 
+
+   }catch(error){
+       throw new ApiError(400, "error in controller")
+   }            
+
 })
 
+//-----------------get a video by id -------------//
+
+const getVideoById = asyncHandler(async(req, res)=>{
+        
+    try{
+        const {videoId} = req.params
+        
+        if( !isValidObjectId(videoId)){
+            throw new ApiError(400, "invalid VideoID")
+        }
+
+        const video = await Video.findById(videoId);
+
+        if(!video){
+            throw new ApiError(400, "failed to get video")
+        }
+
+        return res.status(200)
+                  .json(new ApiResponse(200, video, "video"))
+
+
+    }catch(error){
+        throw new ApiError(400, "error in getVideoById controller")
+    }
+})
+
+
+//-------------------update video-------------//
+
+const updateVideo = asyncHandler(async(req, res)=>{
+    try{
+       
+    const {videoId} = req.params
+    
+    if(!isValidObjectId){
+        throw new ApiError(400, "invalid videosId")
+    }
+
+    const {title, description} = req.body
+
+    if([title, description].some((field)=> field.trim() == "")){
+        throw new ApiError(400, "please provide title and description")
+    }
+
+    const thumbnailLocalPath = req.file?.path
+    if(! thumbnailLocalPath){
+        throw new ApiError(400, "thumbnail not fount")
+    }
+
+    const cloudinaryThumbnail = await uploadOnCloudinary(thumbnailLocalPath)
+    if(! cloudinaryThumbnail){
+         throw new ApiError(400, "thumbnail not upload to cludinary")
+    }
+
+    const video = await Video.findById(videoId)
+    if(!video){
+         throw new ApiError(400, "video not found")
+    }
+
+    video.title = title
+    video.description = description
+    video.thumbnail={
+        thumbnail_url: cloudinaryThumbnail.url,
+        thumbnailPublic_url: cloudinaryThumbnail.public_id
+    }
+    await video.save()
+
+    // const video = await Video.findByIdAndUpdate(
+    //     videoId,
+    //     {
+    //          $set:{
+    //             title : title,
+    //             description: description,
+    //             thumbnail :{
+    //                 thumbnail_url: cloudinaryThumbnail.url,
+    //                 thumbnailPublic_url: cloudinaryThumbnail.public_id
+    //             }
+    //          }
+    //     },
+    //     {
+    //         new: true
+    //     }
+    // )
+  
+     return res.status(200)
+                .json(200, video, "updated video")
+
+    }catch(error){
+         throw new ApiError(400, "error in update video controller")
+    }
+})
+
+
 export{
-    publishVideo
+    publishVideo,
+    getVideoById,
+    updateVideo
 }
